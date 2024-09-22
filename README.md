@@ -1,5 +1,5 @@
-# Dino
-#### Dynamic config management. 🦖
+# Dino 🦖
+#### Dynamic config management.
 
 ## Example usage
 
