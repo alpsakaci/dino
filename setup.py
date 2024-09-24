@@ -7,7 +7,7 @@ def parse_requirements(filename):
 
 
 setup(
-    name="dino",
+    name="dinocore",
     version="0.1",
     packages=find_packages(),
     install_requires=parse_requirements("requirements.txt"),
