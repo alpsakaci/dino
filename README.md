@@ -4,6 +4,12 @@
 [![PyPI version](https://badge.fury.io/py/dinocore.svg)](https://pypi.org/project/dinocore/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
+## Installation
+
+```
+pip install dinocore
+```
+
 
 ## Example usage
 
