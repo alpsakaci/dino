@@ -1,6 +1,7 @@
 import sys
 import logging
 import yaml
+from typing import Dict, List, Any, Optional
 import threading
 import time
 import hashlib
@@ -8,16 +9,16 @@ import json
 
 
 class DinoObserver:
-    def update_config(self):
+    def update_config(self) -> None:
         pass
 
 
 class Dino:
-    _instance = None
-    _configs = {}
+    _instance: Optional['Dino'] = None
+    _configs: Dict[str, Any] = {}
     _stop_event = threading.Event()
-    _file_watchers = []
-    _observers = []
+    _file_watchers: List[threading.Thread] = []
+    _observers: List[DinoObserver] = []
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
