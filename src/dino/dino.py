@@ -1,6 +1,6 @@
 import sys
 import logging
-import yaml
+import yaml  # type: ignore
 from typing import Dict, List, Any, Optional
 import threading
 import time
@@ -14,7 +14,7 @@ class DinoObserver:
 
 
 class Dino:
-    _instance: Optional['Dino'] = None
+    _instance: Optional["Dino"] = None
     _configs: Dict[str, Any] = {}
     _stop_event = threading.Event()
     _file_watchers: List[threading.Thread] = []
