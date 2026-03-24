@@ -94,9 +94,10 @@ def test_dict_hash():
     
     assert hash1 == hash2
 
-def test_stop_method(mocker):
+def test_stop_method():
+    from unittest.mock import Mock
     dino = Dino()
-    mock_watcher = mocker.Mock()
+    mock_watcher = Mock()
     dino._file_watchers.append(mock_watcher)
     
     dino.stop()
