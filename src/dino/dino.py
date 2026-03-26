@@ -121,6 +121,7 @@ class Dino:
                     file_watch_interval_seconds,
                 ),
             )
+            file_watcher.daemon = True
             self._file_watchers.append(file_watcher)
             file_watcher.start()
 
