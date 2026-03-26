@@ -21,22 +21,15 @@ class DinoObserver(ABC):
 
 
 class Dino:
-    """Singleton class managing YAML configurations and watching them for changes."""
-    _instance: Optional["Dino"] = None
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> "Dino":
-        if cls._instance is None:
-            cls._instance = super(Dino, cls).__new__(cls)
-        return cls._instance
+    """Class managing YAML configurations and watching them for changes."""
 
     def __init__(self) -> None:
         """Initializes the Dino instance."""
-        if not getattr(self, "_initialized", False):
-            self._configs: Dict[str, Any] = {}
-            self._stop_event = threading.Event()
-            self._file_watchers: List[threading.Thread] = []
-            self._observers: List[DinoObserver] = []
-            self._initialized = True
+        self._configs: Dict[str, Any] = {}
+        self._stop_event = threading.Event()
+        self._file_watchers: List[threading.Thread] = []
+        self._observers: List[DinoObserver] = []
+        self._lock = threading.Lock()
 
     def __enter__(self) -> "Dino":
         return self
@@ -46,11 +39,12 @@ class Dino:
 
     def _is_key_exists_in_configs(self, key: str) -> bool:
         """Check if a key exists in configs."""
-        try:
-            self._configs[key]
-            return True
-        except KeyError:
-            return False
+        with self._lock:
+            try:
+                self._configs[key]
+                return True
+            except KeyError:
+                return False
 
     def _validate_config_name(self, name: str) -> None:
         """Validates if a configuration name is unique."""
@@ -70,11 +64,12 @@ class Dino:
 
     def _get_config(self, name: str) -> Dict[str, Any]:
         """Returns the configuration map by name."""
-        try:
-            return self._configs[name]
-        except KeyError:
-            logger.error(f"Dino: Config `{name}` not found in registry.")
-            raise KeyError(f"Dino: Config `{name}` not found in registry.")
+        with self._lock:
+            try:
+                return self._configs[name]
+            except KeyError:
+                logger.error(f"Dino: Config `{name}` not found in registry.")
+                raise KeyError(f"Dino: Config `{name}` not found in registry.")
 
     @staticmethod
     def _get_dict_hash(dictionary: Dict[str, Any]) -> str:
@@ -86,17 +81,19 @@ class Dino:
         """Sets configuration values and checks for changes if required."""
         changed = False
         config_read = self._read_yaml(file_path)
-        if not hash_check:
-            self._configs[name] = config_read
-            changed = True
-        else:
-            current_config_hash = Dino._get_dict_hash(self._configs[name])
-            config_read_hash = Dino._get_dict_hash(config_read)
-
-            if config_read_hash != current_config_hash:
-                logger.info(f"Dino: Config `{name}` changed.")
+        
+        with self._lock:
+            if not hash_check:
                 self._configs[name] = config_read
                 changed = True
+            else:
+                current_config_hash = Dino._get_dict_hash(self._configs[name])
+                config_read_hash = Dino._get_dict_hash(config_read)
+
+                if config_read_hash != current_config_hash:
+                    logger.info(f"Dino: Config `{name}` changed.")
+                    self._configs[name] = config_read
+                    changed = True
 
         return changed
 
@@ -175,3 +172,6 @@ class Dino:
         """Notifies all attached observers."""
         for observer in self._observers:
             observer.update_config()
+
+# Global module-level instance
+dino = Dino()
