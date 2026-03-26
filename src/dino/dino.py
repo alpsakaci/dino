@@ -6,24 +6,30 @@ import threading
 import time
 import hashlib
 import json
+from abc import ABC, abstractmethod
 
 
-class DinoObserver:
+class DinoObserver(ABC):
+    @abstractmethod
     def update_config(self) -> None:
         pass
 
 
 class Dino:
     _instance: Optional["Dino"] = None
-    _configs: Dict[str, Any] = {}
-    _stop_event = threading.Event()
-    _file_watchers: List[threading.Thread] = []
-    _observers: List[DinoObserver] = []
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(Dino, cls).__new__(cls)
         return cls._instance
+
+    def __init__(self):
+        if not getattr(self, "_initialized", False):
+            self._configs: Dict[str, Any] = {}
+            self._stop_event = threading.Event()
+            self._file_watchers: List[threading.Thread] = []
+            self._observers: List[DinoObserver] = []
+            self._initialized = True
 
     def _is_key_exists_in_configs(self, key):
         try:
@@ -35,7 +41,7 @@ class Dino:
     def _validate_config_name(self, name):
         if self._is_key_exists_in_configs(name):
             logging.fatal(f"Dino: `{name}` is already registered.")
-            sys.exit(1)
+            raise ValueError(f"Dino: `{name}` is already registered.")
         logging.info(f"Dino: `{name}` validated.")
 
     def _read_yaml(self, file_path):
@@ -44,14 +50,14 @@ class Dino:
                 return yaml.safe_load(file)
         except Exception as e:
             logging.fatal(f"Dino: File could not read. {e}")
-            sys.exit(1)
+            raise FileNotFoundError(f"Dino: File could not read. {e}")
 
     def _get_config(self, name):
         try:
             return self._configs[name]
         except KeyError:
             logging.fatal(f"Dino: Config `{name}` not found in registry.")
-            sys.exit(1)
+            raise KeyError(f"Dino: Config `{name}` not found in registry.")
 
     @staticmethod
     def _get_dict_hash(dictionary):

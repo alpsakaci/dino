@@ -53,7 +53,7 @@ def test_register_config(tmp_path):
     
     assert dino._configs["main"] == config_data
 
-def test_register_duplicate_config_exits(tmp_path):
+def test_register_duplicate_config_raises(tmp_path):
     config_file = tmp_path / "config.yaml"
     with open(config_file, "w") as f:
         yaml.dump({"key": "value"}, f)
@@ -61,11 +61,11 @@ def test_register_duplicate_config_exits(tmp_path):
     dino = Dino()
     dino.register_config("main", str(config_file))
     
-    # Second time should sys.exit(1)
-    with pytest.raises(SystemExit) as excinfo:
+    # Second time should raise ValueError
+    with pytest.raises(ValueError) as excinfo:
         dino.register_config("main", str(config_file))
     
-    assert excinfo.value.code == 1
+    assert "already registered" in str(excinfo.value)
 
 def test_get_config_value(tmp_path):
     config_file = tmp_path / "config.yaml"
