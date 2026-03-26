@@ -119,23 +119,29 @@ def test_duck_typing_default_value(tmp_path):
     assert dino.get_config_value("main", "app.host", default="localhost") == "localhost"
 
 def test_file_watcher_updates_config(tmp_path):
+    from unittest.mock import patch
     import time
+    original_sleep = time.sleep
     config_file = tmp_path / "watch.yaml"
     with open(config_file, "w") as f:
         f.write("port: 80\n")
         
     dino = Dino()
-    # Watch every 1 second
-    dino.register_config("web", str(config_file), file_watch_interval_seconds=1)
     
-    assert dino.get_config_value("web", "port") == 80
-    
-    time.sleep(1.1)
-    with open(config_file, "w") as f:
-        f.write("port: 90\n")
+    with patch("dino.dino.time.sleep", side_effect=lambda x: original_sleep(0.01)):
+        dino.register_config("web", str(config_file), file_watch_interval_seconds=0.05)
         
-    time.sleep(2)
-    assert dino.get_config_value("web", "port") == 90
+        assert dino.get_config_value("web", "port") == 80
+        
+        with open(config_file, "w") as f:
+            f.write("port: 90\n")
+            
+        start_time = time.time()
+        while dino.get_config_value("web", "port") != 90:
+            if time.time() - start_time > 2.0:
+                raise TimeoutError("Config did not update in time")
+            original_sleep(0.01)
+            
     dino.stop()
 
 def test_context_manager():
@@ -162,16 +168,19 @@ def test_observer_base_update_config():
 def test_watch_file_oserror(tmp_path):
     from unittest.mock import patch
     import time
+    original_sleep = time.sleep
     from dino.dino import Dino
     config_file = tmp_path / "watch_oserror.yaml"
     config_file.write_text("port: 80\n")
         
     dino = Dino()
-    dino.register_config("web", str(config_file), file_watch_interval_seconds=0.2)
     
-    with patch("os.path.getmtime", side_effect=OSError("Mocked error")):
-        time.sleep(0.5)
+    with patch("dino.dino.time.sleep", side_effect=lambda x: original_sleep(0.01)):
+        dino.register_config("web", str(config_file), file_watch_interval_seconds=0.05)
         
+        with patch("os.path.getmtime", side_effect=OSError("Mocked error")):
+            original_sleep(0.2)
+            
     dino.stop()
     
 def test_getattr_duck_typing():
