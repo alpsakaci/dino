@@ -136,3 +136,47 @@ def test_file_watcher_updates_config(tmp_path):
     time.sleep(2)
     assert dino.get_config_value("web", "port") == 90
     dino.stop()
+
+def test_context_manager():
+    from dino.dino import Dino
+    with Dino() as dino:
+        pass
+    assert dino._stop_event.is_set()
+
+def test_missing_config_raises_keyerror():
+    from dino.dino import Dino
+    import pytest
+    dino = Dino()
+    with pytest.raises(KeyError):
+        dino.get_config_value("nonexistent_config", "key")
+
+def test_observer_base_update_config():
+    from dino.dino import DinoObserver
+    class SuperCallingObserver(DinoObserver):
+        def update_config(self, config_name: str) -> None:
+            super().update_config(config_name)
+    obs = SuperCallingObserver()
+    obs.update_config("test")
+
+def test_watch_file_oserror(tmp_path):
+    from unittest.mock import patch
+    import time
+    from dino.dino import Dino
+    config_file = tmp_path / "watch_oserror.yaml"
+    config_file.write_text("port: 80\n")
+        
+    dino = Dino()
+    dino.register_config("web", str(config_file), file_watch_interval_seconds=0.2)
+    
+    with patch("os.path.getmtime", side_effect=OSError("Mocked error")):
+        time.sleep(0.5)
+        
+    dino.stop()
+    
+def test_getattr_duck_typing():
+    from dino.dino import Dino
+    dino = Dino()
+    class Dummy:
+        feature = "on"
+    dino._configs["test"] = {"obj": Dummy()}
+    assert dino.get_config_value("test", "obj.feature") == "on"
