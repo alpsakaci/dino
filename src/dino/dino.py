@@ -138,7 +138,7 @@ class Dino:
     ) -> Any:
         """Gets a configuration value using dot-notation (e.g. 'db.host')."""
         keys_list = key_path.split(".")
-        value = self._get_config(config_name)
+        value: Any = self._get_config(config_name)
         for key in keys_list:
             try:
                 if isinstance(value, dict):
