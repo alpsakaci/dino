@@ -89,21 +89,21 @@ class Dino:
         logger.info("Dino: Central file watcher started.")
         while not self._stop_event.is_set():
             time.sleep(1)
-            
+
             current_time = time.time()
             with self._lock:
                 registry_items = list(self._watch_registry.items())
-                
+
             for name, data in registry_items:
                 if current_time - data["last_check"] >= data["interval"]:
                     data["last_check"] = current_time
                     file_path = data["file_path"]
-                    
+
                     try:
                         current_mtime = os.path.getmtime(file_path)
                     except OSError:
                         continue
-                        
+
                     if current_mtime != data["last_mtime"]:
                         data["last_mtime"] = current_mtime
                         changed = self._set_config(name, file_path, True)
@@ -115,8 +115,9 @@ class Dino:
         """Stops the background file watcher."""
         logger.info("Dino: Stop invoked.")
         self._stop_event.set()
-        if getattr(self, "_watcher_thread", None) is not None and getattr(self._watcher_thread, "is_alive", lambda: False)():
-            self._watcher_thread.join()
+        t = self._watcher_thread
+        if t is not None and t.is_alive():
+            t.join()
 
     def register_config(
         self, name: str, file_path: str, file_watch_interval_seconds: int = 0
@@ -127,17 +128,20 @@ class Dino:
         logger.info(f"Dino: `{name}` registered.")
         if file_watch_interval_seconds > 0:
             self._configs[name] = self._read_yaml(file_path)
-            last_mtime = os.path.getmtime(file_path) if os.path.exists(file_path) else 0.0
-            
+            last_mtime = (
+                os.path.getmtime(file_path) if os.path.exists(file_path) else 0.0
+            )
+
             with self._lock:
                 self._watch_registry[name] = {
                     "file_path": file_path,
                     "interval": file_watch_interval_seconds,
                     "last_check": time.time(),
-                    "last_mtime": last_mtime
+                    "last_mtime": last_mtime,
                 }
-                
-                if getattr(self, "_watcher_thread", None) is None or not self._watcher_thread.is_alive():
+
+                t = self._watcher_thread
+                if t is None or not t.is_alive():
                     self._watcher_thread = threading.Thread(target=self._watcher_loop)
                     self._watcher_thread.daemon = True
                     self._watcher_thread.start()
