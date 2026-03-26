@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 import yaml  # type: ignore
@@ -83,12 +84,20 @@ class Dino:
 
     def _watch_file(self, name, file_path, sleep_seconds=60):
         logging.info(f"Dino: File watch started for `{name}`")
+        last_mtime = os.path.getmtime(file_path) if os.path.exists(file_path) else 0
         while not self._stop_event.is_set():
             time.sleep(sleep_seconds)
-            changed = self._set_config(name, file_path, True)
-            if changed:
-                logging.info(f"Dino: Config update successful for `{name}`")
-                self.notify()
+            try:
+                current_mtime = os.path.getmtime(file_path)
+            except OSError:
+                continue
+            
+            if current_mtime != last_mtime:
+                last_mtime = current_mtime
+                changed = self._set_config(name, file_path, True)
+                if changed:
+                    logging.info(f"Dino: Config update successful for `{name}`")
+                    self.notify()
 
     def stop(self):
         logging.info("Dino: Stop invoked.")
