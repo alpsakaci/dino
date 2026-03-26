@@ -80,7 +80,8 @@ def test_stop_method():
     from unittest.mock import Mock
     dino = Dino()
     mock_watcher = Mock()
-    dino._file_watchers.append(mock_watcher)
+    mock_watcher.is_alive.return_value = True
+    dino._watcher_thread = mock_watcher
     
     dino.stop()
     

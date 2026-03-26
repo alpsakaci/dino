@@ -26,7 +26,8 @@ class Dino:
         """Initializes the Dino instance."""
         self._configs: Dict[str, Any] = {}
         self._stop_event = threading.Event()
-        self._file_watchers: List[threading.Thread] = []
+        self._watch_registry: Dict[str, Dict[str, Any]] = {}
+        self._watcher_thread: Optional[threading.Thread] = None
         self._observers: List[DinoObserver] = []
         self._lock = threading.Lock()
 
@@ -39,11 +40,7 @@ class Dino:
     def _is_key_exists_in_configs(self, key: str) -> bool:
         """Check if a key exists in configs."""
         with self._lock:
-            try:
-                self._configs[key]
-                return True
-            except KeyError:
-                return False
+            return key in self._configs
 
     def _validate_config_name(self, name: str) -> None:
         """Validates if a configuration name is unique."""
@@ -87,30 +84,39 @@ class Dino:
 
         return changed
 
-    def _watch_file(self, name: str, file_path: str, sleep_seconds: int = 60) -> None:
-        """Watches a configuration file for background updates."""
-        logger.info(f"Dino: File watch started for `{name}`")
-        last_mtime = os.path.getmtime(file_path) if os.path.exists(file_path) else 0
+    def _watcher_loop(self) -> None:
+        """A single thread that watches all registered files."""
+        logger.info("Dino: Central file watcher started.")
         while not self._stop_event.is_set():
-            time.sleep(sleep_seconds)
-            try:
-                current_mtime = os.path.getmtime(file_path)
-            except OSError:
-                continue
-
-            if current_mtime != last_mtime:
-                last_mtime = current_mtime
-                changed = self._set_config(name, file_path, True)
-                if changed:
-                    logger.info(f"Dino: Config update successful for `{name}`")
-                    self.notify(name)
+            time.sleep(1)
+            
+            current_time = time.time()
+            with self._lock:
+                registry_items = list(self._watch_registry.items())
+                
+            for name, data in registry_items:
+                if current_time - data["last_check"] >= data["interval"]:
+                    data["last_check"] = current_time
+                    file_path = data["file_path"]
+                    
+                    try:
+                        current_mtime = os.path.getmtime(file_path)
+                    except OSError:
+                        continue
+                        
+                    if current_mtime != data["last_mtime"]:
+                        data["last_mtime"] = current_mtime
+                        changed = self._set_config(name, file_path, True)
+                        if changed:
+                            logger.info(f"Dino: Config update successful for `{name}`")
+                            self.notify(name)
 
     def stop(self) -> None:
-        """Stops all background file watchers."""
+        """Stops the background file watcher."""
         logger.info("Dino: Stop invoked.")
         self._stop_event.set()
-        for file_watcher in self._file_watchers:
-            file_watcher.join()
+        if getattr(self, "_watcher_thread", None) is not None and getattr(self._watcher_thread, "is_alive", lambda: False)():
+            self._watcher_thread.join()
 
     def register_config(
         self, name: str, file_path: str, file_watch_interval_seconds: int = 0
@@ -121,17 +127,20 @@ class Dino:
         logger.info(f"Dino: `{name}` registered.")
         if file_watch_interval_seconds > 0:
             self._configs[name] = self._read_yaml(file_path)
-            file_watcher = threading.Thread(
-                target=self._watch_file,
-                args=(
-                    name,
-                    file_path,
-                    file_watch_interval_seconds,
-                ),
-            )
-            file_watcher.daemon = True
-            self._file_watchers.append(file_watcher)
-            file_watcher.start()
+            last_mtime = os.path.getmtime(file_path) if os.path.exists(file_path) else 0.0
+            
+            with self._lock:
+                self._watch_registry[name] = {
+                    "file_path": file_path,
+                    "interval": file_watch_interval_seconds,
+                    "last_check": time.time(),
+                    "last_mtime": last_mtime
+                }
+                
+                if getattr(self, "_watcher_thread", None) is None or not self._watcher_thread.is_alive():
+                    self._watcher_thread = threading.Thread(target=self._watcher_loop)
+                    self._watcher_thread.daemon = True
+                    self._watcher_thread.start()
 
     def get_config_value(
         self, config_name: str, key_path: str, default: Any = None
