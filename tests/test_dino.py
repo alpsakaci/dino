@@ -9,25 +9,29 @@ from dino import Dino, DinoObserver
 class MockObserver(DinoObserver):
     def __init__(self):
         self.notified = False
+        self.last_config = None
 
-    def update_config(self):
+    def update_config(self, config_name: str):
         self.notified = True
+        self.last_config = config_name
 
 def test_observer_attach_and_notify():
     dino = Dino()
     obs1 = MockObserver()
     obs2 = MockObserver()
     
-    dino.attach([obs1, obs2])
+    dino.attach(obs1, obs2)
     
     # Check if they are added
     assert obs1 in dino._observers
     assert obs2 in dino._observers
     
     # Test notification
-    dino.notify()
+    dino.notify("test_config")
     assert obs1.notified is True
+    assert obs1.last_config == "test_config"
     assert obs2.notified is True
+    assert obs2.last_config == "test_config"
 
 def test_register_config(tmp_path):
     # Create a temporary yaml config file
@@ -71,16 +75,6 @@ def test_get_config_value(tmp_path):
     # Test non-existent keys
     assert dino.get_config_value("app", "db.nonexistent") is None
     assert dino.get_config_value("app", "invalid.path") is None
-
-def test_dict_hash():
-    dino = Dino()
-    d1 = {"a": 1, "b": 2}
-    d2 = {"b": 2, "a": 1}
-    
-    hash1 = dino._get_dict_hash(d1)
-    hash2 = dino._get_dict_hash(d2)
-    
-    assert hash1 == hash2
 
 def test_stop_method():
     from unittest.mock import Mock

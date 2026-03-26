@@ -5,8 +5,6 @@ import yaml  # type: ignore
 from typing import Dict, List, Any, Optional
 import threading
 import time
-import hashlib
-import json
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -15,7 +13,7 @@ logger = logging.getLogger(__name__)
 class DinoObserver(ABC):
     """Abstract base class for Dino Observers."""
     @abstractmethod
-    def update_config(self) -> None:
+    def update_config(self, config_name: str) -> None:
         """Called when a configuration changes."""
         pass
 
@@ -57,7 +55,7 @@ class Dino:
         """Reads and parses a YAML file."""
         try:
             with open(file_path, "r") as file:
-                return yaml.safe_load(file)
+                return yaml.safe_load(file) or {}
         except Exception as e:
             logger.error(f"Dino: File could not read. {e}")
             raise FileNotFoundError(f"Dino: File could not read. {e}")
@@ -71,12 +69,6 @@ class Dino:
                 logger.error(f"Dino: Config `{name}` not found in registry.")
                 raise KeyError(f"Dino: Config `{name}` not found in registry.")
 
-    @staticmethod
-    def _get_dict_hash(dictionary: Dict[str, Any]) -> str:
-        """Generates an MD5 hash of a dictionary."""
-        dict_string = json.dumps(dictionary, sort_keys=True).encode()
-        return hashlib.md5(dict_string).hexdigest()
-
     def _set_config(self, name: str, file_path: str, hash_check: bool = False) -> bool:
         """Sets configuration values and checks for changes if required."""
         changed = False
@@ -87,10 +79,7 @@ class Dino:
                 self._configs[name] = config_read
                 changed = True
             else:
-                current_config_hash = Dino._get_dict_hash(self._configs[name])
-                config_read_hash = Dino._get_dict_hash(config_read)
-
-                if config_read_hash != current_config_hash:
+                if config_read != self._configs.get(name):
                     logger.info(f"Dino: Config `{name}` changed.")
                     self._configs[name] = config_read
                     changed = True
@@ -113,7 +102,7 @@ class Dino:
                 changed = self._set_config(name, file_path, True)
                 if changed:
                     logger.info(f"Dino: Config update successful for `{name}`")
-                    self.notify()
+                    self.notify(name)
 
     def stop(self) -> None:
         """Stops all background file watchers."""
@@ -162,16 +151,16 @@ class Dino:
                 return default
         return value
 
-    def attach(self, observers: List[DinoObserver]) -> None:
+    def attach(self, *observers: DinoObserver) -> None:
         """Attaches observers to be notified upon configuration changes."""
         for observer in observers:
             if observer not in self._observers:
                 self._observers.append(observer)
 
-    def notify(self) -> None:
+    def notify(self, config_name: str) -> None:
         """Notifies all attached observers."""
         for observer in self._observers:
-            observer.update_config()
+            observer.update_config(config_name)
 
 # Global module-level instance
 dino = Dino()
