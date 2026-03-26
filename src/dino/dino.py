@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class DinoObserver(ABC):
     """Abstract base class for Dino Observers."""
+
     @abstractmethod
     def update_config(self, config_name: str) -> None:
         """Called when a configuration changes."""
@@ -73,7 +74,7 @@ class Dino:
         """Sets configuration values and checks for changes if required."""
         changed = False
         config_read = self._read_yaml(file_path)
-        
+
         with self._lock:
             if not hash_check:
                 self._configs[name] = config_read
@@ -96,7 +97,7 @@ class Dino:
                 current_mtime = os.path.getmtime(file_path)
             except OSError:
                 continue
-            
+
             if current_mtime != last_mtime:
                 last_mtime = current_mtime
                 changed = self._set_config(name, file_path, True)
@@ -111,7 +112,9 @@ class Dino:
         for file_watcher in self._file_watchers:
             file_watcher.join()
 
-    def register_config(self, name: str, file_path: str, file_watch_interval_seconds: int = 0) -> None:
+    def register_config(
+        self, name: str, file_path: str, file_watch_interval_seconds: int = 0
+    ) -> None:
         """Registers a new configuration to be managed."""
         self._validate_config_name(name)
         self._set_config(name, file_path)
@@ -146,7 +149,7 @@ class Dino:
                     value = getattr(value, key)
             except Exception:
                 return default
-                
+
             if value is None:
                 return default
         return value
@@ -161,6 +164,7 @@ class Dino:
         """Notifies all attached observers."""
         for observer in self._observers:
             observer.update_config(config_name)
+
 
 # Global module-level instance
 dino = Dino()
