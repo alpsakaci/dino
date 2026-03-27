@@ -1,9 +1,6 @@
 import pytest
 import yaml
-import json
-import threading
 from dino import Dino, DinoObserver
-
 
 
 class MockObserver(DinoObserver):
@@ -15,17 +12,18 @@ class MockObserver(DinoObserver):
         self.notified = True
         self.last_config = config_name
 
+
 def test_observer_attach_and_notify():
     dino = Dino()
     obs1 = MockObserver()
     obs2 = MockObserver()
-    
+
     dino.attach(obs1, obs2)
-    
+
     # Check if they are added
     assert obs1 in dino._observers
     assert obs2 in dino._observers
-    
+
     # Test notification
     dino.notify("test_config")
     assert obs1.notified is True
@@ -33,60 +31,68 @@ def test_observer_attach_and_notify():
     assert obs2.notified is True
     assert obs2.last_config == "test_config"
 
+
 def test_register_config(tmp_path):
     # Create a temporary yaml config file
     config_file = tmp_path / "config.yaml"
     config_data = {"database": {"host": "localhost", "port": 5432}}
     with open(config_file, "w") as f:
         yaml.dump(config_data, f)
-        
+
     dino = Dino()
     dino.register_config("main", str(config_file))
-    
+
     assert dino._configs["main"] == config_data
+
 
 def test_register_duplicate_config_raises(tmp_path):
     config_file = tmp_path / "config.yaml"
     with open(config_file, "w") as f:
         yaml.dump({"key": "value"}, f)
-        
+
     dino = Dino()
     dino.register_config("main", str(config_file))
-    
+
     # Second time should raise ValueError
     with pytest.raises(ValueError) as excinfo:
         dino.register_config("main", str(config_file))
-    
+
     assert "already registered" in str(excinfo.value)
+
 
 def test_get_config_value(tmp_path):
     config_file = tmp_path / "config.yaml"
-    config_data = {"db": {"host": "127.0.0.1", "credentials": {"user": "admin", "pass": "secret"}}}
+    config_data = {
+        "db": {"host": "127.0.0.1", "credentials": {"user": "admin", "pass": "secret"}}
+    }
     with open(config_file, "w") as f:
         yaml.dump(config_data, f)
-        
+
     dino = Dino()
     dino.register_config("app", str(config_file))
-    
+
     # Test valid keys
     assert dino.get_config_value("app", "db.host") == "127.0.0.1"
     assert dino.get_config_value("app", "db.credentials.user") == "admin"
-    
+
     # Test non-existent keys
     assert dino.get_config_value("app", "db.nonexistent") is None
     assert dino.get_config_value("app", "invalid.path") is None
 
+
 def test_stop_method():
     from unittest.mock import Mock
+
     dino = Dino()
     mock_watcher = Mock()
     mock_watcher.is_alive.return_value = True
     dino._watcher_thread = mock_watcher
-    
+
     dino.stop()
-    
+
     assert dino._stop_event.is_set()
     mock_watcher.join.assert_called_once()
+
 
 def test_missing_file_raises_error(tmp_path):
     dino = Dino()
@@ -94,99 +100,114 @@ def test_missing_file_raises_error(tmp_path):
     with pytest.raises(FileNotFoundError):
         dino.register_config("app", bad_path)
 
+
 def test_duck_typing_default_value(tmp_path):
     config_file = tmp_path / "config.yaml"
-    config_data = {
-        "app": {
-            "port": 8080,
-            "features": ["a", "b"]
-        }
-    }
+    config_data = {"app": {"port": 8080, "features": ["a", "b"]}}
     with open(config_file, "w") as f:
         yaml.dump(config_data, f)
-        
+
     dino = Dino()
     dino.register_config("main", str(config_file))
-    
+
     # 1. Normal list access
     assert dino.get_config_value("main", "app.features.0") == "a"
     assert dino.get_config_value("main", "app.features.1") == "b"
-    
+
     # 2. Out of bounds fallback
-    assert dino.get_config_value("main", "app.features.99", default="NOT_FOUND") == "NOT_FOUND"
-    
+    assert (
+        dino.get_config_value("main", "app.features.99", default="NOT_FOUND")
+        == "NOT_FOUND"
+    )
+
     # 3. Missing key completely fallback
     assert dino.get_config_value("main", "app.host", default="localhost") == "localhost"
+
 
 def test_file_watcher_updates_config(tmp_path):
     from unittest.mock import patch
     import time
+
     original_sleep = time.sleep
     config_file = tmp_path / "watch.yaml"
     with open(config_file, "w") as f:
         f.write("port: 80\n")
-        
+
     dino = Dino()
-    
+
     with patch("dino.dino.time.sleep", side_effect=lambda x: original_sleep(0.01)):
         dino.register_config("web", str(config_file), file_watch_interval_seconds=0.05)
-        
+
         assert dino.get_config_value("web", "port") == 80
-        
+
         with open(config_file, "w") as f:
             f.write("port: 90\n")
-            
+
         start_time = time.time()
         while dino.get_config_value("web", "port") != 90:
             if time.time() - start_time > 2.0:
                 raise TimeoutError("Config did not update in time")
             original_sleep(0.01)
-            
+
     dino.stop()
+
 
 def test_context_manager():
     from dino.dino import Dino
+
     with Dino() as dino:
         pass
     assert dino._stop_event.is_set()
 
+
 def test_missing_config_raises_keyerror():
     from dino.dino import Dino
     import pytest
+
     dino = Dino()
     with pytest.raises(KeyError):
         dino.get_config_value("nonexistent_config", "key")
 
+
 def test_observer_base_update_config():
     from dino.dino import DinoObserver
+
     class SuperCallingObserver(DinoObserver):
         def update_config(self, config_name: str) -> None:
             super().update_config(config_name)
+
     obs = SuperCallingObserver()
     obs.update_config("test")
+
 
 def test_watch_file_oserror(tmp_path):
     from unittest.mock import patch
     import time
+
     original_sleep = time.sleep
     from dino.dino import Dino
+
     config_file = tmp_path / "watch_oserror.yaml"
     config_file.write_text("port: 80\n")
-        
+
     dino = Dino()
-    
+
     with patch("dino.dino.time.sleep", side_effect=lambda x: original_sleep(0.01)):
         dino.register_config("web", str(config_file), file_watch_interval_seconds=0.05)
-        
+
         with patch("os.path.getmtime", side_effect=OSError("Mocked error")):
             original_sleep(0.2)
-            
+
     dino.stop()
-    
+
+
 def test_getattr_duck_typing():
     from dino.dino import Dino
+
     dino = Dino()
+
     class Dummy:
         feature = "on"
+
     dino._configs["test"] = {"obj": Dummy()}
     assert dino.get_config_value("test", "obj.feature") == "on"

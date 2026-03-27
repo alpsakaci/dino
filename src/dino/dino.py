@@ -1,5 +1,4 @@
 import os
-import sys
 import logging
 import yaml  # type: ignore
 from typing import Dict, List, Any, Optional
